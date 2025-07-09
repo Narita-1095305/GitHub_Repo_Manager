@@ -20,14 +20,24 @@ type GitHubUser struct {
 	HTMLURL   string `json:"html_url"`
 }
 
+type UserToken struct {
+	UserID      int    `json:"user_id"`
+	Username    string `json:"username"`
+	AccessToken string `json:"access_token"`
+	TokenType   string `json:"token_type"`
+}
+
+// In-memory token storage (in production, use a database)
+var userTokens = make(map[int]*UserToken)
+
 var githubOAuthConfig *oauth2.Config
 
 func InitGitHubOAuth() {
 	githubOAuthConfig = &oauth2.Config{
 		ClientID:     os.Getenv("GITHUB_CLIENT_ID"),
 		ClientSecret: os.Getenv("GITHUB_CLIENT_SECRET"),
-		RedirectURL:  fmt.Sprintf("%s/api/auth/callback", os.Getenv("FRONTEND_URL")),
-		Scopes:       []string{"repo", "user:email"},
+		RedirectURL:  fmt.Sprintf("%s/api/auth/callback", getBackendURL()),
+		Scopes:       []string{"repo", "user:email", "read:org", "delete_repo"},
 		Endpoint:     github.Endpoint,
 	}
 }
@@ -58,4 +68,41 @@ func GetGitHubUser(token *oauth2.Token) (*GitHubUser, error) {
 	}
 
 	return &user, nil
+}
+
+func getBackendURL() string {
+	backendURL := os.Getenv("BACKEND_URL")
+	if backendURL == "" {
+		port := os.Getenv("PORT")
+		if port == "" {
+			port = "8080"
+		}
+		backendURL = "http://localhost:" + port
+	}
+	return backendURL
+}
+
+func StoreUserToken(userID int, username string, token *oauth2.Token) {
+	userTokens[userID] = &UserToken{
+		UserID:      userID,
+		Username:    username,
+		AccessToken: token.AccessToken,
+		TokenType:   token.TokenType,
+	}
+}
+
+func GetUserToken(userID int) *UserToken {
+	return userTokens[userID]
+}
+
+func GetOAuthToken(userID int) *oauth2.Token {
+	userToken := userTokens[userID]
+	if userToken == nil {
+		return nil
+	}
+	
+	return &oauth2.Token{
+		AccessToken: userToken.AccessToken,
+		TokenType:   userToken.TokenType,
+	}
 }

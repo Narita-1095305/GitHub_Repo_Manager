@@ -60,3 +60,21 @@ export interface ConfirmationModalProps {
   cancelText?: string
   type?: 'danger' | 'warning' | 'info'
 }
+
+export interface BulkOperationResult {
+  updated?: Repository[]
+  deleted?: string[]
+  errors: string[]
+  total: number
+  success: number
+  failed: number
+}
+
+export interface BulkDeleteModalProps {
+  isOpen: boolean
+  onClose: () => void
+  onConfirm: () => void
+  repositories: Repository[]
+  title: string
+  message: string
+}

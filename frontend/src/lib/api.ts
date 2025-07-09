@@ -46,14 +46,36 @@ export const authApi = {
 }
 
 export const repositoryApi = {
-  getRepositories: async (): Promise<Repository[]> => {
-    const response = await api.get<ApiResponse<Repository[]>>('/repositories')
-    return response.data.data
+  getRepositories: async (page: number = 1, perPage: number = 30): Promise<{ repositories: Repository[], pagination: { page: number, per_page: number, total: number } }> => {
+    const response = await api.get<ApiResponse<{ data: Repository[], pagination: { page: number, per_page: number, total: number } }>>(`/repositories?page=${page}&per_page=${perPage}`)
+    
+    // Handle the nested data structure from backend
+    const data = response.data.data
+    return {
+      repositories: Array.isArray(data?.data) ? data.data : [],
+      pagination: data?.pagination || { page: 1, per_page: 30, total: 0 }
+    }
+  },
+
+  getAllRepositories: async (): Promise<Repository[]> => {
+    const allRepos: Repository[] = []
+    let page = 1
+    let hasMore = true
+    
+    while (hasMore) {
+      const { repositories, pagination } = await repositoryApi.getRepositories(page, 100)
+      allRepos.push(...repositories)
+      
+      hasMore = repositories.length === 100 && page * 100 < pagination.total
+      page++
+    }
+    
+    return allRepos
   },
   
   updateRepository: async (
     id: number,
-    updates: RepositoryUpdateRequest
+    updates: RepositoryUpdateRequest & { owner: string; name: string }
   ): Promise<Repository> => {
     const response = await api.patch<ApiResponse<Repository>>(
       `/repositories/${id}`,
@@ -62,8 +84,30 @@ export const repositoryApi = {
     return response.data.data
   },
   
-  deleteRepository: async (id: number): Promise<void> => {
-    await api.delete(`/repositories/${id}`)
+  deleteRepository: async (id: number, owner: string, name: string): Promise<void> => {
+    await api.delete(`/repositories/${id}`, {
+      data: { owner, name }
+    })
+  },
+
+  bulkUpdateRepositories: async (
+    repositories: Array<{ owner: string; name: string }>,
+    updates: { private?: boolean; archived?: boolean }
+  ): Promise<BulkOperationResult> => {
+    const response = await api.post<ApiResponse<BulkOperationResult>>('/repositories/bulk-update', {
+      repositories,
+      updates
+    })
+    return response.data.data
+  },
+
+  bulkDeleteRepositories: async (
+    repositories: Array<{ owner: string; name: string }>
+  ): Promise<BulkOperationResult> => {
+    const response = await api.post<ApiResponse<BulkOperationResult>>('/repositories/bulk-delete', {
+      repositories
+    })
+    return response.data.data
   },
 }
 
